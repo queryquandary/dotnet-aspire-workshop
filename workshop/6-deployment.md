@@ -8,8 +8,7 @@ In this example, we'll assume you're deploying the MyWeatherHub app from the pre
 
 1. In the Solution Explorer, right-click on the **AppHost** project and select **Publish** to open the **Publish** dialog.
 
-  > [!TIP]
-  > Publishing .NET Aspire requires the current version of the `azd` CLI. This should be installed with the .NET Aspire workload, but if you get a notification that the CLI is not installed or up to date, you can follow the directions in the next part of this tutorial to install it.
+    > Publishing .NET Aspire requires the current version of the `azd` CLI. This should be installed with the .NET Aspire workload, but if you get a notification that the CLI is not installed or up to date, you can follow the directions in the next part of this tutorial to install it.
 
 1. Select **Azure Container Apps for .NET Aspire** as the publishing target.
 
@@ -19,7 +18,6 @@ In this example, we'll assume you're deploying the MyWeatherHub app from the pre
 1. Select **Finish** to create the environment, then **Close** to exit the dialog workflow and view the deployment environment summary.
 1. Select **Publish** to provision and deploy the resources on Azure.
 
-    > [!TIP]
     > This process may take several minutes to complete. Visual Studio provides status updates on the deployment progress in the output logs and you can learn a lot about how publishing works by watching these updates! You'll see that the process involves creating a resource group, an Azure Container Registry, a Log Analytics workspace, and an Azure Container Apps environment. The app is then deployed to the Azure Container Apps environment.
 
 1. When the publish completes, Visual Studio displays the resource URLs at the bottom of the environment screen. Use these links to view the various deployed resources. Select the **webfrontend** URL to open a browser to the deployed app.
