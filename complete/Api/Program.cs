@@ -19,6 +19,7 @@ builder.Services.AddOpenTelemetry()
     .WithTracing(tracing =>
     {
         tracing.AddSource(builder.Environment.ApplicationName)
+            .AddSource("NwsManager")
             .AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation();
     });
