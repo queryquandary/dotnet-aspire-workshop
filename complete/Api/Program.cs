@@ -16,6 +16,9 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddNwsManager();
 
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(m => m.AddMeter("NwsManagerMetrics"));
+
 var app = builder.Build();
 
 app.MapDefaultEndpoints();

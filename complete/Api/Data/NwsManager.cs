@@ -3,7 +3,7 @@ using System.Web;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Caching.Memory;
 using Api.Data;
-using System.Diagnostics.Metrics;
+using Api.Diagnostics;
 using System.Diagnostics;
 
 namespace Api
@@ -11,13 +11,10 @@ namespace Api
     public class NwsManager(HttpClient httpClient, IMemoryCache cache, IWebHostEnvironment webHostEnvironment)
     {
         private static readonly JsonSerializerOptions options = new(JsonSerializerDefaults.Web);
-        private static readonly Meter meter = new Meter("NwsManagerMetrics", "1.0");
-        private static readonly Counter<int> forecastRequestCounter = meter.CreateCounter<int>("forecast_requests_total", "Total number of forecast requests");
-        private static readonly Histogram<double> forecastRequestDuration = meter.CreateHistogram<double>("forecast_request_duration_seconds", "Histogram of forecast request durations");
 
         public async Task<Zone[]?> GetZonesAsync()
         {
-            using var activity = new ActivitySource("NwsManager").StartActivity("GetZonesAsync");
+            using var activity = NwsManagerDiagnostics.activitySource.StartActivity("GetZonesAsync");
             return await cache.GetOrCreateAsync("zones", async entry =>
             {
                 entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
@@ -53,30 +50,43 @@ namespace Api
 
         public async Task<Forecast[]> GetForecastByZoneAsync(string zoneId)
         {
-            forecastRequestCounter.Add(1);
+            NwsManagerDiagnostics.forecastRequestCounter.Add(1);
             var stopwatch = Stopwatch.StartNew();
 
-            using var activity = new ActivitySource("NwsManager").StartActivity("GetForecastByZoneAsync");
+            using var activity = NwsManagerDiagnostics.activitySource.StartActivity("GetForecastByZoneAsync");
+            activity?.SetTag("zone.id", zoneId);
 
             // Create an exception every 5 calls to simulate an error for testing
             forecastCount++;
             if (forecastCount % 5 == 0)
             {
+                NwsManagerDiagnostics.failedRequestCounter.Add(1);
+                activity?.SetTag("request.success", false);
                 throw new Exception("Random exception thrown by NwsManager.GetForecastAsync");
             }
 
-            var zoneIdSegment = HttpUtility.UrlEncode(zoneId);
-            var zoneUrl = $"https://api.weather.gov/zones/forecast/{zoneIdSegment}/forecast";
-            var forecasts = await httpClient.GetFromJsonAsync<ForecastResponse>(zoneUrl, options);
+            try
+            {
+                var zoneIdSegment = HttpUtility.UrlEncode(zoneId);
+                var zoneUrl = $"https://api.weather.gov/zones/forecast/{zoneIdSegment}/forecast";
+                var forecasts = await httpClient.GetFromJsonAsync<ForecastResponse>(zoneUrl, options);
 
-            stopwatch.Stop();
-            forecastRequestDuration.Record(stopwatch.Elapsed.TotalSeconds);
+                stopwatch.Stop();
+                NwsManagerDiagnostics.forecastRequestDuration.Record(stopwatch.Elapsed.TotalSeconds);
+                activity?.SetTag("request.success", true);
 
-            return forecasts
-                   ?.Properties
-                   ?.Periods
-                   ?.Select(p => (Forecast)p)
-                   .ToArray() ?? [];
+                return forecasts
+                       ?.Properties
+                       ?.Periods
+                       ?.Select(p => (Forecast)p)
+                       .ToArray() ?? [];
+            }
+            catch (HttpRequestException)
+            {
+                NwsManagerDiagnostics.failedRequestCounter.Add(1);
+                activity?.SetTag("request.success", false);
+                throw;
+            }
         }
     }
 }
@@ -109,26 +119,26 @@ namespace Microsoft.Extensions.DependencyInjection
             app.UseOutputCache();
 
             app.MapGet("/zones", async (Api.NwsManager manager) =>
-                {
-                    var zones = await manager.GetZonesAsync();
-                    return TypedResults.Ok(zones);
-                })
+            {
+                var zones = await manager.GetZonesAsync();
+                return TypedResults.Ok(zones);
+            })
                 .CacheOutput(policy => policy.Expire(TimeSpan.FromHours(1)))
                 .WithName("GetZones")
                 .WithOpenApi();
 
             app.MapGet("/forecast/{zoneId}", async Task<Results<Ok<Api.Forecast[]>, NotFound>> (Api.NwsManager manager, string zoneId) =>
+            {
+                try
                 {
-                    try
-                    {
-                        var forecasts = await manager.GetForecastByZoneAsync(zoneId);
-                        return TypedResults.Ok(forecasts);
-                    }
-                    catch (HttpRequestException)
-                    {
-                        return TypedResults.NotFound();
-                    }
-                })
+                    var forecasts = await manager.GetForecastByZoneAsync(zoneId);
+                    return TypedResults.Ok(forecasts);
+                }
+                catch (HttpRequestException)
+                {
+                    return TypedResults.NotFound();
+                }
+            })
                 .CacheOutput(policy => policy.Expire(TimeSpan.FromMinutes(15)).SetVaryByRouteValue("zoneId"))
                 .WithName("GetForecastByZone")
                 .WithOpenApi();
