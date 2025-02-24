@@ -156,13 +156,52 @@ In this module, we will add more advanced telemetry to the application. This inc
    @using System.Diagnostics.Metrics
    ```
 
-2. Add telemetry metrics to track browser interactions:
+2. Add telemetry metrics at the top of the @code block:
    ```csharp
    private static readonly Meter meter = new("WeatherHub.Browser", "1.0");
    private static readonly Counter<int> zoneSelectionCounter = meter.CreateCounter<int>("zone_selections", "Number of zone selections");
    private static readonly Counter<int> zoneLoadErrorCounter = meter.CreateCounter<int>("zone_load_errors", "Number of zone load errors");
    private static readonly Histogram<double> zoneLoadDuration = meter.CreateHistogram<double>("zone_load_duration_seconds", "Time taken to load zone data");
    ```
+
+3. Update the `SelectZone` method to include metrics:
+   ```csharp
+   private async Task SelectZone(Zone zone)
+   {
+       var stopwatch = Stopwatch.StartNew();
+       zoneSelectionCounter.Add(1);  // Track when a user selects a zone
+
+       // Workaround to create a new trace
+       Activity.Current = null;
+
+       SelectedZone = zone;
+       IsLoading = true;
+       StateHasChanged();
+       await Task.Delay(50);
+
+       try
+       {
+           IsLoading = false;
+           Forecast = await NwsManager.GetForecastByZoneAsync(zone.Key);
+           Error = string.Empty;
+           stopwatch.Stop();
+           zoneLoadDuration.Record(stopwatch.Elapsed.TotalSeconds);  // Track how long it took to load
+       }
+       catch (Exception ex)
+       {
+           IsLoading = false;
+           Logger.LogError(ex, "Error getting forecast for {0}({1})", zone.Name, zone.Key);
+           Forecast = null!;
+           Error = $"Unable to locate weather for {SelectedZone.Name}({SelectedZone.Key})";
+           zoneLoadErrorCounter.Add(1);  // Track when a load fails
+       }
+   }
+   ```
+
+The metrics are used to track three key aspects of user interaction:
+- `zoneSelectionCounter`: Increments at the start of the `SelectZone` method to track how often users click on zones
+- `zoneLoadDuration`: Records how long it takes to load the forecast data for a zone using a `Stopwatch`
+- `zoneLoadErrorCounter`: Increments in the catch block when there's an error loading the forecast
 
 ### Testing Browser Telemetry
 
