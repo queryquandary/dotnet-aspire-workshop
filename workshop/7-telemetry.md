@@ -138,10 +138,9 @@ In this module, we will add more advanced telemetry to the application. This inc
 
 ## Running the Application and Observing Output
 
-1. Run the application using your preferred method (e.g., Visual Studio, `dotnet run` command).
-2. Open your browser and navigate to the API endpoints to interact with the application.
-3. Click on a few weather forecasts by accessing the `/forecast/{zoneId}` endpoint with different `zoneId` values.
-4. Open the .NET Aspire dashboard to observe the telemetry data.
+1. Run the application and click on a few cities the .NET Aspire dashboard to observe the telemetry data.
+2. In the .NET Aspire dashboard, navigate to the "Metrics" section to view the custom metrics.
+3. Navigate to the "Tracing" section to view the distributed traces for activities like `GetZonesAsync` and `GetForecastByZoneAsync`.
 
 ### Steps to Observe Telemetry Data
 
@@ -152,7 +151,35 @@ In this module, we will add more advanced telemetry to the application. This inc
 
 ## Browser Telemetry Support
 
-1. Follow the guidance in the docs to enable browser telemetry support using OpenTelemetry Protocol (OTLP) over HTTP and cross-origin resource sharing (CORS).
+1. Open `Home.razor` and add the following using:
+   ```csharp
+   @using System.Diagnostics.Metrics
+   ```
+
+2. Add telemetry metrics to track browser interactions:
+   ```csharp
+   private static readonly Meter meter = new("WeatherHub.Browser", "1.0");
+   private static readonly Counter<int> zoneSelectionCounter = meter.CreateCounter<int>("zone_selections", "Number of zone selections");
+   private static readonly Counter<int> zoneLoadErrorCounter = meter.CreateCounter<int>("zone_load_errors", "Number of zone load errors");
+   private static readonly Histogram<double> zoneLoadDuration = meter.CreateHistogram<double>("zone_load_duration_seconds", "Time taken to load zone data");
+   ```
+
+### Testing Browser Telemetry
+
+1. Run the application using .NET Aspire
+2. Open the .NET Aspire dashboard
+3. Navigate to the "Metrics" section
+4. Look for the following browser-specific metrics:
+   - `zone_selections`: Increases each time a user clicks a zone
+   - `zone_load_duration_seconds`: Shows the distribution of load times
+   - `zone_load_errors`: Tracks failed zone loads
+
+You can test this by:
+1. Clicking various zones to see the selection counter increase
+2. Selecting a non-responsive zone (like Bristol Bay, AK) to see error counts
+3. Watching load duration metrics as you select different zones
+
+These metrics help monitor user interactions and identify potential performance or reliability issues from the browser perspective.
 
 ## Telemetry Integrations
 
