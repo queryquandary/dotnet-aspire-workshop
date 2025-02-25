@@ -93,11 +93,6 @@ else if (SelectedZone != null && !string.IsNullOrEmpty(Error))
 
 @code {
 
-	private static readonly Meter meter = new("WeatherHub.Browser", "1.0");
-    private static readonly Counter<int> zoneSelectionCounter = meter.CreateCounter<int>("zone_selections", "Number of zone selections");
-    private static readonly Counter<int> zoneLoadErrorCounter = meter.CreateCounter<int>("zone_load_errors", "Number of zone load errors");
-    private static readonly Histogram<double> zoneLoadDuration = meter.CreateHistogram<double>("zone_load_duration_seconds", "Time taken to load zone data");
-
 	IQueryable<Zone> zones
 	{
 		get
@@ -143,13 +138,6 @@ else if (SelectedZone != null && !string.IsNullOrEmpty(Error))
 
 	private async Task SelectZone(Zone zone)
 	{
-		var stopwatch = Stopwatch.StartNew();
-        zoneSelectionCounter.Add(1);
-
-		// Workaround to create a new trace
-		// Blazor server keeps connection open so a new trace isn't created
-		Activity.Current = null;
-
 		SelectedZone = zone;
 		IsLoading = true;
 		StateHasChanged();
@@ -160,8 +148,6 @@ else if (SelectedZone != null && !string.IsNullOrEmpty(Error))
 			IsLoading = false;
 			Forecast = await NwsManager.GetForecastByZoneAsync(zone.Key);
 			Error = string.Empty;
-			stopwatch.Stop();
-            zoneLoadDuration.Record(stopwatch.Elapsed.TotalSeconds);
 		}
 		catch (Exception ex)
 		{
@@ -169,10 +155,7 @@ else if (SelectedZone != null && !string.IsNullOrEmpty(Error))
 			Logger.LogError(ex, "Error getting forecast for {0}({1})", zone.Name, zone.Key);
 			Forecast = null!;
 			Error = $"Unable to locate weather for {SelectedZone.Name}({SelectedZone.Key})";
-			zoneLoadErrorCounter.Add(1);
 		}
-
 	}
-
 
 }
