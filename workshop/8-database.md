@@ -264,5 +264,3 @@ Data API Builder (DAB) automatically generates REST and GraphQL endpoints from y
 - Custom policy support
 - Real-time updates via GraphQL subscriptions
 - Database schema-driven API design
-
-**Next**: [Module #9: Deployment](9-deployment.md)
