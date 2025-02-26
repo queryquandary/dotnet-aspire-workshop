@@ -1,50 +1,82 @@
-using Aspire.Hosting.Testing;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Net.Http.Json;
 
-namespace IntegrationTests
+namespace MyWeatherHub.Tests;
+
+[TestClass]
+public class IntegrationTests
 {
-    [TestClass]
-    public class IntegrationTests
+    [TestMethod]
+    public async Task TestApiGetZones()
     {
-        private static AspireTestHost _host;
-        private static HttpClient _client;
+        // Arrange
+        var appHost = await DistributedApplicationTestingBuilder
+            .CreateAsync<Projects.AppHost>();
 
-        [ClassInitialize]
-        public static void ClassInitialize(TestContext context)
+        appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
-            _host = new AspireTestHost();
-            _client = _host.CreateClient();
-        }
+            clientBuilder.AddStandardResilienceHandler();
+        });
 
-        [ClassCleanup]
-        public static void ClassCleanup()
-        {
-            _client.Dispose();
-            _host.Dispose();
-        }
+        await using var app = await appHost.BuildAsync();
 
-        [TestMethod]
-        public async Task TestApiGetZones()
-        {
-            var response = await _client.GetAsync("/zones");
-            response.EnsureSuccessStatusCode();
+        var resourceNotificationService = app.Services
+            .GetRequiredService<ResourceNotificationService>();
 
-            var zones = await response.Content.ReadFromJsonAsync<Zone[]>();
-            Assert.IsNotNull(zones);
-            Assert.IsTrue(zones.Length > 0);
-        }
+        await app.StartAsync();
 
-        [TestMethod]
-        public async Task TestWebAppHomePage()
-        {
-            var response = await _client.GetAsync("/");
-            response.EnsureSuccessStatusCode();
+        // Act
+        var httpClient = app.CreateHttpClient("api");
 
-            var content = await response.Content.ReadAsStringAsync();
-            Assert.IsTrue(content.Contains("MyWeatherHub"));
-        }
+        await resourceNotificationService.WaitForResourceAsync(
+                "api",
+                KnownResourceStates.Running
+            )
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        var response = await httpClient.GetAsync("/zones");
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        var zones = await response.Content.ReadFromJsonAsync<Zone[]>();
+        Assert.IsNotNull(zones);
+        Assert.IsTrue(zones.Length > 0);
     }
 
-    public record Zone(string Key, string Name, string State);
+    [TestMethod]
+    public async Task TestWebAppHomePage()
+    {
+        // Arrange
+        var appHost = await DistributedApplicationTestingBuilder
+            .CreateAsync<Projects.AppHost>();
+
+        appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
+        {
+            clientBuilder.AddStandardResilienceHandler();
+        });
+
+        await using var app = await appHost.BuildAsync();
+
+        var resourceNotificationService = app.Services
+            .GetRequiredService<ResourceNotificationService>();
+
+        await app.StartAsync();
+
+        // Act
+        var httpClient = app.CreateHttpClient("myweatherhub");
+
+        await resourceNotificationService.WaitForResourceAsync(
+                "myweatherhub",
+                KnownResourceStates.Running
+            )
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        var response = await httpClient.GetAsync("/");
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.IsTrue(content.Contains("MyWeatherHub"));
+    }
 }
+
+public record Zone(string Key, string Name, string State);

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-In this module, we will cover integration testing using `Aspire.Hosting.Testing` with `MSTest`. Integration testing is crucial for ensuring that different parts of your application work together as expected. We will create a separate test project to test both the API and the web application. Additionally, we will explain the use of Playwright for end-to-end testing.
+In this module, we will cover integration testing using `Aspire.Hosting.Testing` with `MSTest`. Integration testing is crucial for ensuring that different parts of your application work together as expected. We will create a separate test project to test both the API and the web application.
 
 ## Difference Between Unit Testing and Integration Testing
 
@@ -13,97 +13,190 @@ In the context of distributed applications with .NET Aspire, integration testing
 ## Creating the Integration Test Project
 
 1. Create a new test project named `IntegrationTests` in the `complete` folder.
-2. Add references to the `Aspire.Hosting.Testing` and `MSTest` packages in the `IntegrationTests.csproj` file:
+1. Add references to the required packages in the `IntegrationTests.csproj` file:
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+    </PropertyGroup>
 
-  <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <IsPackable>false</IsPackable>
-  </PropertyGroup>
+    <PropertyGroup>
+        <EnableMSTestRunner>true</EnableMSTestRunner>
+        <OutputType>Exe</OutputType>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.Testing" Version="9.1.0" />
-    <PackageReference Include="MSTest.TestAdapter" Version="2.2.8" />
-    <PackageReference Include="MSTest.TestFramework" Version="2.2.8" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Aspire.Hosting.Testing" Version="9.1.0" />
+        <PackageReference Include="MSTest" Version="3.8.2" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Api\Api.csproj" />
-    <ProjectReference Include="..\MyWeatherHub\MyWeatherHub.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\AppHost\AppHost.csproj" />
+    </ItemGroup>
 
+    <ItemGroup>
+        <Using Include="System.Net" />
+        <Using Include="Microsoft.Extensions.DependencyInjection" />
+        <Using Include="Aspire.Hosting.ApplicationModel" />
+        <Using Include="Aspire.Hosting.Testing" />
+        <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+    </ItemGroup>
 </Project>
 ```
 
-3. Create a test class for integration tests in the `IntegrationTests.cs` file:
+1. Create test classes for integration tests:
+
+The `IntegrationTests.cs` file tests the API and web application functionality:
 
 ```csharp
-using Aspire.Hosting.Testing;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.Net.Http.Json;
+namespace MyWeatherHub.Tests;
 
-namespace IntegrationTests
+[TestClass]
+public class IntegrationTests
 {
-    [TestClass]
-    public class IntegrationTests
+    [TestMethod]
+    public async Task TestApiGetZones()
     {
-        private static AspireTestHost _host;
-        private static HttpClient _client;
+        // Arrange
+        var appHost = await DistributedApplicationTestingBuilder
+            .CreateAsync<Projects.AppHost>();
 
-        [ClassInitialize]
-        public static void ClassInitialize(TestContext context)
+        appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
         {
-            _host = new AspireTestHost();
-            _client = _host.CreateClient();
-        }
+            clientBuilder.AddStandardResilienceHandler();
+        });
 
-        [ClassCleanup]
-        public static void ClassCleanup()
-        {
-            _client.Dispose();
-            _host.Dispose();
-        }
+        await using var app = await appHost.BuildAsync();
 
-        [TestMethod]
-        public async Task TestApiGetZones()
-        {
-            var response = await _client.GetAsync("/zones");
-            response.EnsureSuccessStatusCode();
+        var resourceNotificationService = app.Services
+            .GetRequiredService<ResourceNotificationService>();
 
-            var zones = await response.Content.ReadFromJsonAsync<Zone[]>();
-            Assert.IsNotNull(zones);
-            Assert.IsTrue(zones.Length > 0);
-        }
+        await app.StartAsync();
 
-        [TestMethod]
-        public async Task TestWebAppHomePage()
-        {
-            var response = await _client.GetAsync("/");
-            response.EnsureSuccessStatusCode();
+        // Act
+        var httpClient = app.CreateHttpClient("api");
 
-            var content = await response.Content.ReadAsStringAsync();
-            Assert.IsTrue(content.Contains("MyWeatherHub"));
-        }
+        await resourceNotificationService.WaitForResourceAsync(
+                "api",
+                KnownResourceStates.Running
+            )
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        var response = await httpClient.GetAsync("/zones");
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        var zones = await response.Content.ReadFromJsonAsync<Zone[]>();
+        Assert.IsNotNull(zones);
+        Assert.IsTrue(zones.Length > 0);
     }
 
-    public record Zone(string Key, string Name, string State);
+    [TestMethod]
+    public async Task TestWebAppHomePage()
+    {
+        // Arrange
+        var appHost = await DistributedApplicationTestingBuilder
+            .CreateAsync<Projects.AppHost>();
+
+        appHost.Services.ConfigureHttpClientDefaults(clientBuilder =>
+        {
+            clientBuilder.AddStandardResilienceHandler();
+        });
+
+        await using var app = await appHost.BuildAsync();
+
+        var resourceNotificationService = app.Services
+            .GetRequiredService<ResourceNotificationService>();
+
+        await app.StartAsync();
+
+        // Act
+        var httpClient = app.CreateHttpClient("myweatherhub");
+
+        await resourceNotificationService.WaitForResourceAsync(
+                "myweatherhub",
+                KnownResourceStates.Running
+            )
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        var response = await httpClient.GetAsync("/");
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.IsTrue(content.Contains("MyWeatherHub"));
+    }
+}
+
+public record Zone(string Key, string Name, string State);
+```
+
+The `EnvVarTests.cs` file verifies environment variable resolution:
+
+```csharp
+namespace MyWeatherHub.Tests;
+
+[TestClass]
+public class EnvVarTests
+{
+    [TestMethod]
+    public async Task WebResourceEnvVarsResolveToApiService()
+    {
+        // Arrange
+        var appHost = await DistributedApplicationTestingBuilder
+            .CreateAsync<Projects.AppHost>();
+
+        var frontend = (IResourceWithEnvironment)appHost.Resources
+            .Single(static r => r.Name == "myweatherhub");
+
+        // Act
+        var envVars = await frontend.GetEnvironmentVariableValuesAsync(
+            DistributedApplicationOperation.Publish);
+
+        // Assert
+        CollectionAssert.Contains(envVars,
+            new KeyValuePair<string, string>(
+                key: "services__api__https__0",
+                value: "{api.bindings.https.url}"));
+    }
 }
 ```
 
 ## Running the Integration Tests
 
+### Using the Command Line
+
 1. Open a terminal and navigate to the `complete` folder.
-2. Run the integration tests using the `dotnet test` command:
+1. Run the integration tests using the `dotnet test` command:
 
 ```bash
 dotnet test IntegrationTests/IntegrationTests.csproj
 ```
 
-The tests will run and verify that the API and web application are functioning correctly together.
+### Using Visual Studio Test Explorer
 
-## Playwright for End-to-End Testing
+1. Open the solution in Visual Studio
+1. Open the Test Explorer by going to View > Test Explorer (or press Ctrl+E, T)
+1. In the Test Explorer window, you'll see all the tests in your solution
+1. You can:
+   - Run all tests by clicking the "Run All" button at the top
+   - Run a specific test by right-clicking it and selecting "Run"
+   - Run failed tests only by clicking the "Run Failed Tests" button
+   - Run tests in debug mode by right-clicking and selecting "Debug"
+   - View test results and output in the Test Explorer window
+
+The tests will verify that:
+
+- Environment variables are properly configured
+- The API endpoints are working correctly
+- The web application is functioning as expected
+
+## Additional Testing Tools
 
 Playwright is a powerful tool for end-to-end testing. It allows you to automate browser interactions and verify that your application works as expected from the user's perspective. Playwright supports multiple browsers, including Chromium, Firefox, and WebKit.
 
@@ -124,4 +217,4 @@ For more information on Playwright, refer to the [official documentation](https:
 
 In this module, we covered integration testing using `Aspire.Hosting.Testing` with `MSTest`. We created a separate test project to test both the API and the web application. Additionally, we explained the use of Playwright for end-to-end testing. Integration testing is essential for ensuring that different parts of your application work together as expected, and Playwright provides a powerful tool for end-to-end testing.
 
-**Next**: [Module #10: Advanced Topics](10-advanced-topics.md)
+For a deeper dive into testing with .NET Aspire, including a video walkthrough, check out the [Getting started with testing and .NET Aspire](https://devblogs.microsoft.com/dotnet/getting-started-with-testing-and-dotnet-aspire/) blog post.
