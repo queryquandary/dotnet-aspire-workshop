@@ -1,5 +1,7 @@
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
+using Api.Data;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 

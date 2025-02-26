@@ -222,4 +222,4 @@ To send telemetry to Azure Application Insights:
 
 For other integrations, consult their respective documentation for .NET OpenTelemetry setup instructions.
 
-**Next**: Module #8 - Next Module
+**Next**: [Module #8: Database Integration](8-database.md)

@@ -2,15 +2,16 @@
 @using Microsoft.AspNetCore.Components.QuickGrid
 @using System.Diagnostics
 @using System.Diagnostics.Metrics
+@using Microsoft.EntityFrameworkCore
 @inject NwsManager NwsManager
 @inject ILogger<NwsManager> Logger
+@inject MyWeatherContext DbContext
 @rendermode InteractiveServer
 
 <PageTitle>My Weather Hub</PageTitle>
 
 <HeadContent>
 	<style>
-
 		.quickgrid {
 			width: 100%;
 		}
@@ -45,6 +46,20 @@
 			</ColumnOptions>
 			<ChildContent>
 				<span class="@(SelectedZone == context ? "selectedCell" : "")">@context.State</span>
+			</ChildContent>
+		</TemplateColumn>
+		<TemplateColumn Title="Favorite">
+			<ChildContent>
+				<button @onclick="@(() => ToggleFavorite(context))">
+					@if (FavoriteZones.Contains(context))
+					{
+						<span>&#9733;</span> <!-- Starred -->
+					}
+					else
+					{
+						<span>&#9734;</span> <!-- Unstarred -->
+					}
+				</button>
 			</ChildContent>
 		</TemplateColumn>
 	</QuickGrid>
@@ -97,7 +112,6 @@ else if (SelectedZone != null && !string.IsNullOrEmpty(Error))
 	{
 		get
 		{
-
 			var results = AllZones
 				.AsQueryable();
 
@@ -107,8 +121,9 @@ else if (SelectedZone != null && !string.IsNullOrEmpty(Error))
 			results = string.IsNullOrEmpty(NameFilter) ? results
 					: results.Where(z => z.Name.Contains(NameFilter, StringComparison.InvariantCultureIgnoreCase));
 
-			return results;
+			results = results.OrderByDescending(z => FavoriteZones.Contains(z)).ThenBy(z => z.Name);
 
+			return results;
 		}
 	}
 
@@ -131,9 +146,12 @@ else if (SelectedZone != null && !string.IsNullOrEmpty(Error))
 
 	bool IsLoading = false;
 
+	List<Zone> FavoriteZones { get; set; } = new List<Zone>();
+
 	protected override async Task OnInitializedAsync()
 	{
 		AllZones = (await NwsManager.GetZonesAsync()).ToArray();
+        FavoriteZones = await DbContext.FavoriteZones.ToListAsync();
 	}
 
 	private async Task SelectZone(Zone zone)
@@ -156,6 +174,21 @@ else if (SelectedZone != null && !string.IsNullOrEmpty(Error))
 			Forecast = null!;
 			Error = $"Unable to locate weather for {SelectedZone.Name}({SelectedZone.Key})";
 		}
+	}
+
+	private async Task ToggleFavorite(Zone zone)
+	{
+		if (FavoriteZones.Contains(zone))
+		{
+			FavoriteZones.Remove(zone);
+			DbContext.FavoriteZones.Remove(zone);
+		}
+		else
+		{
+			FavoriteZones.Add(zone);
+			DbContext.FavoriteZones.Add(zone);
+		}
+		await DbContext.SaveChangesAsync();
 	}
 
 }
