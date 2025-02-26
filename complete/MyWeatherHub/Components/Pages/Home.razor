@@ -47,6 +47,20 @@
 				<span class="@(SelectedZone == context ? "selectedCell" : "")">@context.State</span>
 			</ChildContent>
 		</TemplateColumn>
+		<TemplateColumn Title="Favorite">
+			<ChildContent>
+				<button @onclick="@(() => ToggleFavorite(context))">
+					@if (FavoriteZones.Contains(context))
+					{
+						<span>&#9733;</span> <!-- Starred -->
+					}
+					else
+					{
+						<span>&#9734;</span> <!-- Unstarred -->
+					}
+				</button>
+			</ChildContent>
+		</TemplateColumn>
 	</QuickGrid>
 	<Paginator State="@pagination"></Paginator>
 </div>
@@ -97,7 +111,6 @@ else if (SelectedZone != null && !string.IsNullOrEmpty(Error))
 	{
 		get
 		{
-
 			var results = AllZones
 				.AsQueryable();
 
@@ -108,7 +121,6 @@ else if (SelectedZone != null && !string.IsNullOrEmpty(Error))
 					: results.Where(z => z.Name.Contains(NameFilter, StringComparison.InvariantCultureIgnoreCase));
 
 			return results;
-
 		}
 	}
 
@@ -130,6 +142,8 @@ else if (SelectedZone != null && !string.IsNullOrEmpty(Error))
 	string Error { get; set; } = string.Empty;
 
 	bool IsLoading = false;
+
+	List<Zone> FavoriteZones { get; set; } = new List<Zone>();
 
 	protected override async Task OnInitializedAsync()
 	{
@@ -155,6 +169,18 @@ else if (SelectedZone != null && !string.IsNullOrEmpty(Error))
 			Logger.LogError(ex, "Error getting forecast for {0}({1})", zone.Name, zone.Key);
 			Forecast = null!;
 			Error = $"Unable to locate weather for {SelectedZone.Name}({SelectedZone.Key})";
+		}
+	}
+
+	private void ToggleFavorite(Zone zone)
+	{
+		if (FavoriteZones.Contains(zone))
+		{
+			FavoriteZones.Remove(zone);
+		}
+		else
+		{
+			FavoriteZones.Add(zone);
 		}
 	}
 

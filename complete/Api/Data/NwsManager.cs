@@ -5,6 +5,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Api.Data;
 using Api.Diagnostics;
 using System.Diagnostics;
+using Microsoft.EntityFrameworkCore;
 
 namespace Api
 {
@@ -12,7 +13,8 @@ namespace Api
                 HttpClient httpClient,
                 IMemoryCache cache,
                 IWebHostEnvironment webHostEnvironment,
-                ILogger<NwsManager> logger)
+                ILogger<NwsManager> logger,
+                ApplicationDbContext dbContext)
     {
         private static readonly JsonSerializerOptions options = new(JsonSerializerDefaults.Web);
 
@@ -57,6 +59,10 @@ namespace Api
                 );
 
                 activity?.SetTag("cache.hit", true);
+
+                // Save zones to the database
+                dbContext.Zones.AddRange(filteredZones);
+                await dbContext.SaveChangesAsync();
 
                 return filteredZones;
             });
