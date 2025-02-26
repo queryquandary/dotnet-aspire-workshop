@@ -5,6 +5,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Aspire part 1 of 2 start
+builder.AddServiceDefaults();
+// Aspire part 1 of 2 end
+
 builder.Services.AddNwsManager();
 
 var app = builder.Build();
@@ -20,5 +24,9 @@ app.UseHttpsRedirection();
 
 // Map the endpoints for the API
 app.MapApiEndpoints();
+
+// Aspire part 2 of 2 start
+app.MapDefaultEndpoints();
+// Aspire part 2 of 2 end
 
 app.Run();

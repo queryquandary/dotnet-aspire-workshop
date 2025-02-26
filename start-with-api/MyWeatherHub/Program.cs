@@ -7,6 +7,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Aspire part 1 of 2 start
+builder.AddServiceDefaults();
+// Aspire part 1 of 2 end
+
 builder.Services.AddHttpClient<NwsManager>(c =>
 {
     var url = builder.Configuration["WeatherEndpoint"] ?? throw new InvalidOperationException("WeatherEndpoint is not set");
@@ -31,5 +35,9 @@ app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// Aspire part 2 of 2 start
+app.MapDefaultEndpoints();
+// Aspire part 2 of 2 end
 
 app.Run();
