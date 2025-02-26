@@ -13,8 +13,7 @@ namespace Api
                 HttpClient httpClient,
                 IMemoryCache cache,
                 IWebHostEnvironment webHostEnvironment,
-                ILogger<NwsManager> logger,
-                ApplicationDbContext dbContext)
+                ILogger<NwsManager> logger)
     {
         private static readonly JsonSerializerOptions options = new(JsonSerializerDefaults.Web);
 
@@ -59,10 +58,6 @@ namespace Api
                 );
 
                 activity?.SetTag("cache.hit", true);
-
-                // Save zones to the database
-                dbContext.Zones.AddRange(filteredZones);
-                await dbContext.SaveChangesAsync();
 
                 return filteredZones;
             });
