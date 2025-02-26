@@ -54,6 +54,7 @@ This .NET Aspire workshop is part of the [Let's Learn .NET](https://aka.ms/letsl
 1. [Deployment](./workshop/6-deployment.md)
 1. [Telemetry Module](./workshop/7-telemetry.md)
 1. [Database Module](./workshop/8-database.md)
+1. [Integration Testing](./workshop/9-integration-testing.md)
 
 A full slide deck is available for this workshop [here](./workshop/AspireWorkshop.pptx).
 
